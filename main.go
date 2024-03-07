@@ -173,7 +173,7 @@ func setupStatusCmd() cli.Command {
 }
 
 func main() {
-	loadEnvFiles()
+	loadEnv()
 
 	app := cli.NewApp()
 
@@ -203,30 +203,58 @@ func main() {
 	app.Run(os.Args)
 }
 
-func loadEnvFiles() {
+func loadEnv() {
+	environment := map[string]string{}
+	// loadEnvironment(environment)
+	loadEnvFiles(environment)
+	loadEnvironment(environment)
+	setEnvVars(environment)
+}
+
+func loadEnvFiles(environment map[string]string) {
 	// First load the specifically named overmind env files
 	userHomeDir, _ := os.UserHomeDir()
-	loadEnvFile(path.Join(userHomeDir, ".overmind.env"))
-	loadEnvFile("./.overmind.env")
+	loadEnvFile(environment, path.Join(userHomeDir, ".overmind.env"))
+	loadEnvFile(environment, "./.overmind.env")
 
 	_, skipEnv := os.LookupEnv("OVERMIND_SKIP_ENV")
 	if !skipEnv {
-		loadEnvFile("./.env")
+		loadEnvFile(environment, "./.env")
 	}
 
 	envs := strings.Split(os.Getenv("OVERMIND_ENV"), ",")
 	for _, e := range envs {
 		if len(e) > 0 {
-			loadEnvFile(e)
+			loadEnvFile(environment, e)
 		}
 	}
 }
 
-func loadEnvFile(file string) {
-	err := godotenv.Overload(file)
+func loadEnvFile(environment map[string]string, file string) {
+	envMap, err := godotenv.Read(file)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			fmt.Fprintln(os.Stderr, "overmind: skipping", file, "due to error:", err)
 		}
+	} else {
+		for key, value := range envMap {
+			environment[key] = value
+		}
+	}
+}
+
+func loadEnvironment(environment map[string]string) {
+	rawEnv := os.Environ()
+	for _, rawEnvLine := range rawEnv {
+		key, value, found := strings.Cut(rawEnvLine, "=")
+		if found {
+			environment[key] = value
+		}
+	}
+}
+
+func setEnvVars(environment map[string]string) {
+	for key, value := range environment {
+		os.Setenv(key, value)
 	}
 }
