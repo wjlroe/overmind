@@ -205,9 +205,14 @@ func main() {
 
 func loadEnv() {
 	environment := map[string]string{}
-	// loadEnvironment(environment)
-	loadEnvFiles(environment)
-	loadEnvironment(environment)
+	_, keepEnv := os.LookupEnv("OVERMIND_KEEP_ENV")
+	if keepEnv {
+		loadEnvFiles(environment)
+		loadEnvironment(environment)
+	} else {
+		loadEnvironment(environment)
+		loadEnvFiles(environment)
+	}
 	setEnvVars(environment)
 }
 
