@@ -204,26 +204,55 @@ func main() {
 }
 
 func loadEnvFiles() {
+	_, dontOverwriteShellEnv := os.LookupEnv("OVERMIND_DONT_OVERWRITE_ENV")
+
 	// First load the specifically named overmind env files
 	userHomeDir, _ := os.UserHomeDir()
-	loadEnvFile(path.Join(userHomeDir, ".overmind.env"))
-	loadEnvFile("./.overmind.env")
+	loadEnvFilesInOrder(
+		[]string{
+			path.Join(userHomeDir, ".overmind.env"),
+			"./.overmind.env",
+		},
+		dontOverwriteShellEnv,
+	)
 
+	// In case OVERMIND_DONT_OVERWRITE_ENV is set in one of the .overmind.env files
+	_, dontOverwriteShellEnv = os.LookupEnv("OVERMIND_DONT_OVERWRITE_ENV")
+
+	var filesToLoad []string
 	_, skipEnv := os.LookupEnv("OVERMIND_SKIP_ENV")
 	if !skipEnv {
-		loadEnvFile("./.env")
+		filesToLoad = append(filesToLoad, "./.env")
 	}
 
 	envs := strings.Split(os.Getenv("OVERMIND_ENV"), ",")
 	for _, e := range envs {
-		if len(e) > 0 {
-			loadEnvFile(e)
+		filesToLoad = append(filesToLoad, e)
+	}
+
+	loadEnvFilesInOrder(filesToLoad, dontOverwriteShellEnv)
+}
+
+func loadEnvFilesInOrder(files []string, dontOverwriteShellEnv bool) {
+	for i := range files {
+		idx := i
+		// If we're not overwriting env vars, the order we load the files needs to be reversed
+		if dontOverwriteShellEnv {
+			idx = len(files) - 1 - i
 		}
+		loadEnvFile(files[idx], dontOverwriteShellEnv)
 	}
 }
 
-func loadEnvFile(file string) {
-	err := godotenv.Overload(file)
+func loadEnvFile(file string, dontOverwriteShellEnv bool) {
+	var err error
+	if dontOverwriteShellEnv {
+		fmt.Fprintln(os.Stderr, "Loading env from", file)
+		err = godotenv.Load(file)
+	} else {
+		fmt.Fprintln(os.Stderr, "Overloading env from", file)
+		err = godotenv.Overload(file)
+	}
 	if err != nil {
 		if !os.IsNotExist(err) {
 			fmt.Fprintln(os.Stderr, "overmind: skipping", file, "due to error:", err)
